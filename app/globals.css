@@ -44,14 +44,17 @@ body {
 /* Layout Utama */
 .app-container {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  background-color: #f8fafc;
 }
 
 .main-content {
   flex: 1;
-  margin-left: 260px;
-  padding: 2rem;
-  transition: all 0.3s ease;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem;
 }
 
 .main-content.no-sidebar {

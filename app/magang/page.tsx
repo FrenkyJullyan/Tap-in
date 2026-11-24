@@ -1,284 +1,555 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
 import { supabase } from '@/lib/supabase';
 
-export default function PortalMagang() {
-  const [uniqueId, setUniqueId] = useState('');
-  const [nama, setNama] = useState('');
+// ---------- Helper waktu (waktu lokal perangkat, bukan UTC) ----------
+const pad = (n: number) => String(n).padStart(2, '0');
+
+const getTanggalLokal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const getJamLokal = () => {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+// Data lama tersimpan dengan titik (10.56.18); tampilkan seragam dengan titik dua
+const fmtJam = (j?: string | null) => (j ? j.replace(/\./g, ':') : '-');
+
+const fmtTanggal = (t?: string | null) => {
+  if (!t) return '-';
+  const d = new Date(t + 'T00:00:00');
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const capitalize = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+
+// ---------- Style bersama ----------
+const cardStyle: React.CSSProperties = {
+  background: '#ffffff',
+  borderRadius: '16px',
+  padding: '1.5rem',
+  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.04)',
+};
+
+const cardTitleStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.6rem',
+  fontSize: '1.05rem',
+  fontWeight: 700,
+  color: 'var(--bpn-navy, #0f2a4a)',
+  paddingBottom: '0.85rem',
+  marginBottom: '1.1rem',
+  borderBottom: '1px solid #e2e8f0',
+};
+
+const nowrap: React.CSSProperties = { whiteSpace: 'nowrap' };
+
+export default function MagangPage() {
+  const router = useRouter();
+  const [nisInput, setNisInput] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [siswaData, setSiswaData] = useState<any>(null);
+  const [sekolahNama, setSekolahNama] = useState('');
+  const [currentTime, setCurrentTime] = useState('');
+  const [currentDate, setCurrentDate] = useState('');
+  const [statusMasuk, setStatusMasuk] = useState('hadir');
+  const [riwayatSaya, setRiwayatSaya] = useState<any[]>([]);
+  const [absenHariIni, setAbsenHariIni] = useState<any>(null);
+  const [pesanSukses, setPesanSukses] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  
-  // State untuk form alasan pulang cepat jika jam < 16:00
+
+  // State untuk form alasan pulang cepat
   const [showAlasanModal, setShowAlasanModal] = useState(false);
-  const [alasan, setAlasan] = useState('');
+  const [alasanText, setAlasanText] = useState('');
 
-  // Fungsi Absen Masuk (Tanpa Instansi)
-  const handleAbsenMasuk = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uniqueId || !nama) {
-      setMessage({ type: 'error', text: 'Mohon lengkapi ID Unik dan Nama Lengkap Anda!' });
-      return;
-    }
-
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Cek apakah sudah absen masuk hari ini
-      const { data: existing } = await supabase
-        .from('absensi')
-        .select('*')
-        .eq('unique_id', uniqueId.trim().toUpperCase())
-        .eq('tanggal', today)
-        .single();
-
-      if (existing) {
-        setMessage({ type: 'error', text: 'ID ini sudah tercatat melakukan Absen Masuk hari ini.' });
-        setLoading(false);
-        return;
-      }
-
-      // Simpan ke database (instansi dikosongkan atau diatur default)
-      const { error } = await supabase.from('absensi').insert([
-        {
-          unique_id: uniqueId.trim().toUpperCase(),
-          nama: nama.trim(),
-          instansi: '-',
-          tanggal: today,
-          jam_masuk: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          status: 'Hadir',
-        },
-      ]);
-
-      if (error) throw error;
-
-      setMessage({ type: 'success', text: 'Absen Masuk berhasil dicatat! Selamat beraktivitas.' });
-      setUniqueId('');
-      setNama('');
-    } catch (err: any) {
-      setMessage({ type: 'error', text: 'Gagal memproses absen: ' + err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fungsi Absen Pulang
-  const handleAbsenPulang = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uniqueId) {
-      setMessage({ type: 'error', text: 'Masukkan ID Unik Peserta terlebih dahulu!' });
-      return;
-    }
-
-    const now = new Date();
-    const currentHour = now.getHours();
-    
-    // Jika pulang sebelum jam 16:00 WIB, wajib isi alasan
-    if (currentHour < 16 && !showAlasanModal) {
-      setShowAlasanModal(true);
-      return;
-    }
-
-    processPulang(alasan);
-  };
-
-  const processPulang = async (keteranganAlasan = '') => {
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      const { data: existing, error: fetchError } = await supabase
-        .from('absensi')
-        .select('*')
-        .eq('unique_id', uniqueId.trim().toUpperCase())
-        .eq('tanggal', today)
-        .single();
-
-      if (fetchError || !existing) {
-        setMessage({ type: 'error', text: 'Data absen masuk hari ini tidak ditemukan untuk ID tersebut.' });
-        setLoading(false);
-        return;
-      }
-
-      if (existing.jam_pulang) {
-        setMessage({ type: 'error', text: 'Anda sudah melakukan Absen Pulang hari ini.' });
-        setLoading(false);
-        return;
-      }
-
-      const currentHour = new Date().getHours();
-      const statusPulang = currentHour < 16 ? 'Pending (Pulang Cepat)' : 'Selesai';
-
-      const { error: updateError } = await supabase
-        .from('absensi')
-        .update({
-          jam_pulang: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          alasan_pulang_cepat: keteranganAlasan,
-          status_pulang: statusPulang,
+  useEffect(() => {
+    const tick = () => {
+      setCurrentTime(getJamLokal());
+      setCurrentDate(
+        new Date().toLocaleDateString('id-ID', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
         })
-        .eq('id', existing.id);
+      );
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-      if (updateError) throw updateError;
+  const handleLogin = async () => {
+    const cleanId = nisInput.trim().toUpperCase();
+    if (!cleanId) {
+      setErrorMsg('Masukkan ID Absensi terlebih dahulu!');
+      return;
+    }
 
-      setMessage({ 
-        type: 'success', 
-        text: currentHour < 16 
-          ? 'Absen pulang dicatat. Karena sebelum jam 16:00, status menunggu verifikasi admin.' 
-          : 'Absen Pulang berhasil dicatat. Hati-hati di jalan!' 
-      });
-      
-      setUniqueId('');
-      setShowAlasanModal(false);
-      setAlasan('');
-    } catch (err: any) {
-      setMessage({ type: 'error', text: 'Gagal memproses absen pulang: ' + err.message });
-    } finally {
-      setLoading(false);
+    const { data: siswa, error } = await supabase
+      .from('siswa')
+      .select('*')
+      .ilike('nis', cleanId)
+      .eq('aktif', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Login error:', error.message, error.code, error.details, error.hint);
+      setErrorMsg('Gagal terhubung ke database: ' + error.message);
+      return;
+    }
+
+    if (!siswa) {
+      setErrorMsg('ID Peserta tidak terdaftar atau dalam status nonaktif!');
+      return;
+    }
+
+    const { data: sek } = await supabase
+      .from('sekolah')
+      .select('nama')
+      .eq('id', siswa.id_sekolah)
+      .maybeSingle();
+
+    setErrorMsg('');
+    setPesanSukses('');
+    setSiswaData(siswa);
+    setSekolahNama(sek?.nama || 'Tidak diketahui');
+    await fetchAbsensiData(siswa.id);
+  };
+
+  const fetchAbsensiData = async (siswaId: number) => {
+    const today = getTanggalLokal();
+
+    const { data: absHariIni } = await supabase
+      .from('absensi')
+      .select('*')
+      .eq('siswa_id', siswaId)
+      .eq('tanggal', today)
+      .maybeSingle();
+
+    setAbsenHariIni(absHariIni);
+
+    const { data: riwPribadi } = await supabase
+      .from('absensi')
+      .select('*')
+      .eq('siswa_id', siswaId)
+      .order('tanggal', { ascending: false });
+
+    setRiwayatSaya(riwPribadi || []);
+  };
+
+  const handleAbsenMasuk = async () => {
+    if (loading) return;
+    setLoading(true);
+
+    const { error } = await supabase.from('absensi').insert([
+      {
+        siswa_id: siswaData.id,
+        sekolah_id: siswaData.id_sekolah,
+        tanggal: getTanggalLokal(),
+        jam_masuk: getJamLokal(),
+        status_masuk: statusMasuk,
+        jenis_kehadiran: capitalize(statusMasuk),
+      },
+    ]);
+
+    if (error) {
+      alert('Gagal melakukan absen masuk: ' + error.message);
+    } else {
+      setPesanSukses('Absen masuk berhasil dicatat ke dalam sistem!');
+      await fetchAbsensiData(siswaData.id);
+    }
+    setLoading(false);
+  };
+
+  // Tombol Absen Pulang ditekan
+  const triggerAbsenPulang = () => {
+    if (new Date().getHours() < 16) {
+      setShowAlasanModal(true); // sebelum 16:00 wajib isi alasan
+    } else {
+      processAbsenPulang('');
     }
   };
 
-  return (
-    <div className="app-container">
-      <Sidebar />
-      <main className="main-content">
-        <div className="content-body animated-fade-in">
-          
-          {/* Header Banner Portal */}
-          <div className="card" style={{ background: 'linear-gradient(135deg, var(--bpn-navy), var(--bpn-navy-dark))', color: 'white', marginBottom: '1.75rem' }}>
-            <div>
-              <span className="badge" style={{ background: 'rgba(234, 179, 8, 0.2)', color: 'var(--bpn-gold)', marginBottom: '0.5rem', display: 'inline-block' }}>
-                <i className="fa-solid fa-clock"></i> Portal Resmi Harian
-              </span>
-              <h1 style={{ fontSize: '1.65rem', fontWeight: '800', color: '#fff', marginBottom: '0.35rem' }}>
-                Portal Absensi Peserta Magang
-              </h1>
-              <p style={{ color: 'var(--slate-200)', fontSize: '0.92rem', maxWidth: '650px' }}>
-                Silakan lakukan absensi kehadiran masuk dan pulang menggunakan ID Unik Anda format <strong style={{ color: 'var(--bpn-gold)' }}>DDMMYY + Inisial</strong>.
-              </p>
+  const processAbsenPulang = async (alasan: string) => {
+    if (loading || !absenHariIni?.id) return;
+    setLoading(true);
+
+    const isPulangCepat = new Date().getHours() < 16;
+
+    const { error } = await supabase
+      .from('absensi')
+      .update({
+        jam_pulang: getJamLokal(),
+        status_pulang: 'hadir',
+        alasan_pulang_cepat: isPulangCepat ? alasan : null,
+        status_pulang_cepat: isPulangCepat ? 'pending' : null,
+      })
+      .eq('id', absenHariIni.id);
+
+    if (error) {
+      alert('Gagal melakukan absen pulang: ' + error.message);
+    } else {
+      setShowAlasanModal(false);
+      setAlasanText('');
+      setPesanSukses(
+        isPulangCepat
+          ? 'Permintaan pulang cepat dikirim. Menunggu persetujuan Admin/Pembimbing.'
+          : 'Absen pulang terekam. Terima kasih atas dedikasi hari ini!'
+      );
+      await fetchAbsensiData(siswaData.id);
+    }
+    setLoading(false);
+  };
+
+  const handleLogout = () => {
+    setSiswaData(null);
+    setAbsenHariIni(null);
+    setRiwayatSaya([]);
+    setNisInput('');
+    setPesanSukses('');
+    setErrorMsg('');
+    setShowAlasanModal(false);
+    setAlasanText('');
+  };
+
+  // ======================= TAMPILAN LOGIN =======================
+  if (!siswaData) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          background:
+            'linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.92)), url("/kantor-bpn.jpg") center/cover no-repeat, #0f172a',
+        }}
+      >
+        <div
+          className="animated-fade-in"
+          style={{ ...cardStyle, width: '100%', maxWidth: '420px', padding: '2rem', borderRadius: '20px' }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                background: 'rgba(30, 58, 138, 0.1)',
+                color: 'var(--bpn-navy, #0f2a4a)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.75rem',
+                fontSize: '1.25rem',
+              }}
+            >
+              <i className="fas fa-user-graduate"></i>
             </div>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--bpn-navy, #0f2a4a)', marginBottom: '0.25rem' }}>
+              Portal Peserta Magang
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: '#64748b' }}>Masukkan Nomor ID Absensi Anda untuk mulai</p>
           </div>
 
-          {/* Notifikasi Alert */}
-          {message && (
-            <div className={`alert ${message.type === 'success' ? 'alert-success' : 'alert-error'}`}>
-              <i className={`fa-solid ${message.type === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation'}`} style={{ fontSize: '1.1rem' }}></i>
-              <span>{message.text}</span>
+          {errorMsg && (
+            <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+              <i className="fas fa-exclamation-circle"></i> {errorMsg}
             </div>
           )}
 
-          {/* Grid Formulir Absensi */}
-          <div className="grid-2">
-            
-            {/* Card Absen Masuk */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div className="card-header" style={{ marginBottom: '1rem' }}>
-                <h3><i className="fa-solid fa-arrow-right-to-bracket" style={{ color: 'var(--bpn-green)' }}></i> Absen Masuk</h3>
-                <span className="badge badge-success">Kehadiran</span>
-              </div>
-              <p style={{ fontSize: '0.88rem', color: 'var(--slate-500)', marginBottom: '1.25rem' }}>
-                Lakukan absensi saat tiba di Kantor Pertanahan Kabupaten Subang.
-              </p>
-
-              <form onSubmit={handleAbsenMasuk} style={{ display: 'flex', flexDirection: 'column', flex: '1', justifyContent: 'space-between' }}>
-                <div>
-                  <div className="form-group">
-                    <label>ID Unik Peserta</label>
-                    <input 
-                      type="text" 
-                      placeholder="Contoh: 170804AS" 
-                      value={uniqueId}
-                      onChange={(e) => setUniqueId(e.target.value)}
-                      required 
-                    />
-                    <small style={{ fontSize: '0.75rem', color: 'var(--slate-500)', marginTop: '0.25rem', display: 'block' }}>
-                      Format: TanggalLahir(DDMMYY) + InisialNama
-                    </small>
-                  </div>
-                  <div className="form-group">
-                    <label>Nama Lengkap</label>
-                    <input 
-                      type="text" 
-                      placeholder="Masukkan nama lengkap Anda" 
-                      value={nama}
-                      onChange={(e) => setNama(e.target.value)}
-                      required 
-                    />
-                  </div>
-                </div>
-
-                <button type="submit" className="btn btn-success btn-full" disabled={loading} style={{ marginTop: '1.25rem' }}>
-                  <i className="fa-solid fa-check-circle"></i> {loading ? 'Memproses...' : 'Kirim Absen Masuk'}
-                </button>
-              </form>
-            </div>
-
-            {/* Card Absen Pulang */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div className="card-header" style={{ marginBottom: '1rem' }}>
-                <h3><i className="fa-solid fa-arrow-right-from-bracket" style={{ color: 'var(--bpn-gold-dark)' }}></i> Absen Pulang</h3>
-                <span className="badge badge-warning">Jam Kerja: 16:00 WIB</span>
-              </div>
-              <p style={{ fontSize: '0.88rem', color: 'var(--slate-500)', marginBottom: '1.25rem' }}>
-                Lakukan absensi saat jam kerja selesai atau saat izin meninggalkan kantor lebih awal.
-              </p>
-
-              <form onSubmit={handleAbsenPulang} style={{ display: 'flex', flexDirection: 'column', flex: '1', justifyContent: 'space-between' }}>
-                <div>
-                  <div className="form-group">
-                    <label>ID Unik Peserta</label>
-                    <input 
-                      type="text" 
-                      placeholder="Contoh: 170804AS" 
-                      value={uniqueId}
-                      onChange={(e) => setUniqueId(e.target.value)}
-                      required 
-                    />
-                    <small style={{ fontSize: '0.75rem', color: 'var(--slate-500)', marginTop: '0.25rem', display: 'block' }}>
-                      Masukkan ID unik yang sama seperti saat absen masuk.
-                    </small>
-                  </div>
-
-                  {showAlasanModal && (
-                    <div className="form-group animated-fade-in" style={{ background: '#fef3c7', padding: '1rem', borderRadius: '10px', border: '1.5px solid #fcd34d', marginTop: '1rem' }}>
-                      <label style={{ color: '#92400e', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                        <i className="fa-solid fa-triangle-exclamation"></i> Pulang Sebelum Jam 16:00 WIB
-                      </label>
-                      <p style={{ fontSize: '0.8rem', color: '#b45309', marginBottom: '0.6rem' }}>
-                        Jam kepulangan kurang dari ketentuan instansi. Wajib mengisi alasan untuk verifikasi admin:
-                      </p>
-                      <textarea 
-                        rows={3}
-                        placeholder="Contoh: Izin ada keperluan mendadak dari pihak sekolah..."
-                        value={alasan}
-                        onChange={(e) => setAlasan(e.target.value)}
-                        required
-                        style={{ background: '#fff' }}
-                      ></textarea>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ marginTop: '1.25rem' }}>
-                  <div style={{ background: 'var(--slate-50)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--slate-200)', marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--slate-600)' }}>
-                    <i className="fa-solid fa-circle-info" style={{ color: 'var(--bpn-navy)', marginRight: '0.4rem' }}></i>
-                    Jam operasional kantor berakhir pukul 16:00 WIB. Pulang lebih awal memerlukan persetujuan admin.
-                  </div>
-
-                  <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-                    <i className="fa-solid fa-person-walking-arrow-right"></i> {loading ? 'Memproses...' : (showAlasanModal ? 'Kirim Absen dengan Alasan' : 'Kirim Absen Pulang')}
-                  </button>
-                </div>
-              </form>
-            </div>
-
+          <div className="form-group">
+            <label style={{ fontWeight: 700, color: 'var(--bpn-navy, #0f2a4a)' }}>
+              <i className="fas fa-id-card"></i> Nomor ID Absensi
+            </label>
+            <input
+              type="text"
+              value={nisInput}
+              onChange={(e) => setNisInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              placeholder="Contoh: 150709FJS"
+              style={{ textTransform: 'uppercase', textAlign: 'center', fontWeight: 700, letterSpacing: '1px' }}
+            />
           </div>
 
+          <button className="btn btn-primary btn-full" onClick={handleLogin} style={{ marginTop: '0.5rem', fontWeight: 700 }}>
+            <i className="fas fa-sign-in-alt"></i> Masuk Ke Portal
+          </button>
+
+          <div style={{ textAlign: 'center', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
+            <button className="btn btn-danger btn-sm" onClick={() => router.push('/')}>
+              <i className="fas fa-arrow-left"></i> Kembali ke Menu Utama
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const sudahMasuk = absenHariIni && absenHariIni.jam_masuk !== null;
+  const sudahPulang = absenHariIni && absenHariIni.jam_pulang !== null;
+
+  // ======================= TAMPILAN DASHBOARD =======================
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        width: '100%',
+        background:
+          'linear-gradient(rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.9)), url("/kantor-bpn.jpg") center/cover no-repeat, #0f172a',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      <Sidebar role="magang" />
+
+      <main style={{ width: '100%', maxWidth: '1100px', margin: '0 auto', padding: '1.25rem 1rem 3rem' }}>
+        {/* Sapaan */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.15rem' }}>
+            Halo, {siswaData.nama}
+          </h1>
+          <p style={{ fontSize: '0.88rem', color: '#cbd5e1' }}>{currentDate}</p>
+        </div>
+
+        <div
+          className="animated-fade-in"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '1.25rem',
+            alignItems: 'start',
+          }}
+        >
+          {/* ============ KOLOM KIRI ============ */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Jam digital */}
+            <div
+              style={{
+                ...cardStyle,
+                background: 'linear-gradient(135deg, var(--bpn-navy, #0f2a4a), var(--bpn-navy-dark, #0a1c33))',
+                color: '#ffffff',
+                textAlign: 'center',
+                padding: '1.75rem 1.5rem',
+              }}
+            >
+              <i className="fas fa-clock" style={{ fontSize: '1.4rem', color: 'var(--bpn-gold, #d4a017)' }}></i>
+              <div style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '2px', margin: '0.35rem 0', fontVariantNumeric: 'tabular-nums' }}>
+                {currentTime || '00:00:00'}
+              </div>
+              <small style={{ color: '#cbd5e1', fontSize: '0.78rem' }}>
+                *Jam kerja resmi pulang mulai pukul 16.00 WIB
+              </small>
+            </div>
+
+            {/* Profil & aksi */}
+            <div style={cardStyle}>
+              <div style={cardTitleStyle}>
+                <i className="fas fa-id-card-clip" style={{ color: 'var(--bpn-gold-dark, #b8860b)' }}></i>
+                Profil Peserta Magang
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.55rem 1rem', fontSize: '0.92rem', marginBottom: '1.25rem' }}>
+                <span style={{ color: '#64748b' }}>Nama Lengkap</span>
+                <strong>{siswaData.nama}</strong>
+                <span style={{ color: '#64748b' }}>Asal Instansi</span>
+                <strong>{sekolahNama}</strong>
+                <span style={{ color: '#64748b' }}>ID Absensi</span>
+                <span>
+                  <code style={{ background: '#f1f5f9', padding: '0.15rem 0.5rem', borderRadius: '6px', fontWeight: 700 }}>
+                    {siswaData.nis}
+                  </code>
+                </span>
+              </div>
+
+              {/* Ringkasan hari ini */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Masuk hari ini</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: sudahMasuk ? '#15803d' : '#94a3b8' }}>
+                    {sudahMasuk ? fmtJam(absenHariIni.jam_masuk) : 'Belum'}
+                  </div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Pulang hari ini</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: sudahPulang ? '#b91c1c' : '#94a3b8' }}>
+                    {sudahPulang ? fmtJam(absenHariIni.jam_pulang) : 'Belum'}
+                  </div>
+                </div>
+              </div>
+
+              {pesanSukses && (
+                <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+                  <i className="fas fa-check-circle"></i> {pesanSukses}
+                </div>
+              )}
+
+              {!sudahMasuk && (
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label style={{ fontWeight: 700 }}>
+                    <i className="fas fa-clipboard-check"></i> Status Kehadiran Hari Ini
+                  </label>
+                  <select value={statusMasuk} onChange={(e) => setStatusMasuk(e.target.value)}>
+                    <option value="hadir">Hadir (Dinas Kerja/Normal)</option>
+                    <option value="sakit">Sakit (Melampirkan Surat)</option>
+                    <option value="izin">Izin (Kepentingan Resmi/Mendesak)</option>
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  className="btn btn-success"
+                  style={{ flex: 1, padding: '0.8rem', fontWeight: 700 }}
+                  onClick={handleAbsenMasuk}
+                  disabled={sudahMasuk || loading}
+                >
+                  <i className="fas fa-sign-in-alt"></i> Absen Masuk {sudahMasuk ? '✓' : ''}
+                </button>
+                <button
+                  className="btn btn-danger"
+                  style={{ flex: 1, padding: '0.8rem', fontWeight: 700 }}
+                  onClick={triggerAbsenPulang}
+                  disabled={!sudahMasuk || sudahPulang || loading}
+                >
+                  <i className="fas fa-sign-out-alt"></i> Absen Pulang {sudahPulang ? '✓' : ''}
+                </button>
+              </div>
+
+              {/* Form alasan pulang cepat */}
+              {showAlasanModal && (
+                <div
+                  style={{
+                    marginTop: '1.25rem',
+                    background: '#fffbeb',
+                    border: '1px solid #f59e0b',
+                    borderRadius: '12px',
+                    padding: '1rem',
+                  }}
+                >
+                  <h4 style={{ color: '#b45309', fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.4rem' }}>
+                    <i className="fas fa-exclamation-triangle"></i> Konfirmasi Pulang Sebelum Jam 16:00
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: '#78350f', lineHeight: 1.5, marginBottom: '0.75rem' }}>
+                    Anda melakukan absen pulang sebelum pukul 16.00 WIB. Wajib mencantumkan alasan yang valid untuk
+                    ditinjau oleh Admin.
+                  </p>
+                  <textarea
+                    rows={3}
+                    value={alasanText}
+                    onChange={(e) => setAlasanText(e.target.value)}
+                    placeholder="Tuliskan alasan izin pulang cepat di sini..."
+                    style={{ marginBottom: '0.75rem' }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ flex: 1 }}
+                      disabled={loading}
+                      onClick={() => {
+                        if (!alasanText.trim()) {
+                          alert('Alasan wajib diisi!');
+                          return;
+                        }
+                        processAbsenPulang(alasanText.trim());
+                      }}
+                    >
+                      Kirim Permohonan
+                    </button>
+                    <button className="btn btn-outline btn-sm" onClick={() => setShowAlasanModal(false)}>
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ============ KOLOM KANAN ============ */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={cardStyle}>
+              <div style={cardTitleStyle}>
+                <i className="fas fa-history" style={{ color: 'var(--bpn-gold-dark, #b8860b)' }}></i>
+                Riwayat Kehadiran Pribadi
+              </div>
+
+              <div style={{ maxHeight: '420px', overflow: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bpn-navy, #0f2a4a)', color: '#ffffff' }}>
+                      {['Tanggal', 'Masuk', 'Pulang', 'Status'].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            ...nowrap,
+                            textAlign: 'left',
+                            padding: '0.7rem 0.85rem',
+                            fontWeight: 700,
+                            position: 'sticky',
+                            top: 0,
+                            background: 'var(--bpn-navy, #0f2a4a)',
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {riwayatSaya.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8' }}>
+                          Belum ada catatan absensi
+                        </td>
+                      </tr>
+                    ) : (
+                      riwayatSaya.map((a, i) => (
+                        <tr key={a.id ?? i} style={{ borderTop: '1px solid #e2e8f0' }}>
+                          <td style={{ ...nowrap, padding: '0.7rem 0.85rem' }}>{fmtTanggal(a.tanggal)}</td>
+                          <td style={{ ...nowrap, padding: '0.7rem 0.85rem', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtJam(a.jam_masuk)}
+                          </td>
+                          <td style={{ ...nowrap, padding: '0.7rem 0.85rem', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtJam(a.jam_pulang)}
+                          </td>
+                          <td style={{ ...nowrap, padding: '0.7rem 0.85rem' }}>
+                            {a.status_pulang_cepat === 'pending' ? (
+                              <span className="badge badge-warning">Menunggu Admin</span>
+                            ) : a.status_pulang_cepat === 'rejected' ? (
+                              <span className="badge badge-danger">Ditolak Admin</span>
+                            ) : (
+                              <span className={`badge badge-${a.status_masuk === 'hadir' ? 'success' : 'warning'}`}>
+                                {capitalize(a.status_masuk)}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center' }}>
+              <button
+                className="btn btn-sm"
+                onClick={handleLogout}
+                style={{ padding: '0.65rem 1.75rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}
+              >
+                <i className="fas fa-sign-out-alt"></i> Keluar Portal
+              </button>
+            </div>
+          </div>
         </div>
       </main>
     </div>

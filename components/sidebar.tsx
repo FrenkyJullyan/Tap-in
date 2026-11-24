@@ -1,50 +1,195 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Image from 'next/image';
 
-export default function Sidebar() {
+type Role = 'admin' | 'magang';
+
+type SidebarProps = {
+  // Opsional: kalau tidak diisi, semua menu tampil
+  role?: Role;
+};
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  roles?: Role[]; // kalau kosong, tampil untuk semua role
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/', label: 'Halaman Utama', icon: 'fa-house' },
+  { href: '/magang', label: 'Portal Peserta Magang', icon: 'fa-user-graduate', roles: ['magang'] },
+  { href: '/admin', label: 'Panel Administrator', icon: 'fa-user-shield', roles: ['admin'] },
+];
+
+export default function Sidebar({ role }: SidebarProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
-  const navItems = [
-    { name: 'Beranda', href: '/', icon: 'fa-house' },
-    { name: 'Portal Magang', href: '/magang', icon: 'fa-user-check' },
-    { name: 'Rekap Laporan', href: '/rekap', icon: 'fa-file-excel' },
-    { name: 'Admin Dashboard', href: '/admin', icon: 'fa-lock' },
-  ];
+  const navItems = NAV_ITEMS.filter(
+    (item) => !role || !item.roles || item.roles.includes(role)
+  );
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <Image src="/logo-bpn.jpg" alt="Logo ATR/BPN" width={42} height={42} />
-        <div className="sidebar-brand-text">
-          <h2>ATR / BPN</h2>
-          <p>Kabupaten Subang</p>
+    <>
+      {/* Top Bar Header (Muncul di HP & Desktop secara bersih) */}
+      <header
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 40,
+          background: 'var(--bpn-navy)',
+          color: '#fff',
+          padding: '0.85rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+        }}
+      >
+        <Link
+          href="/"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            textDecoration: 'none',
+            color: '#fff',
+          }}
+        >
+          <img
+            src="/logo-bpn.jpg"
+            alt="Logo BPN"
+            style={{ width: '34px', height: '34px', objectFit: 'contain' }}
+          />
+          <div>
+            <div style={{ fontWeight: '700', fontSize: '0.95rem', lineHeight: '1.2' }}>
+              Tap-in ATR/BPN
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--bpn-gold)' }}>
+              Kabupaten Subang
+            </div>
+          </div>
+        </Link>
+
+        {/* Tombol Buka/Tutup Menu */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle Menu"
+          aria-expanded={isOpen}
+          style={{
+            background: 'rgba(255, 255, 255, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#fff',
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.1rem',
+            cursor: 'pointer',
+          }}
+        >
+          <i className={`fa-solid ${isOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
+        </button>
+      </header>
+
+      {/* Latar Gelap (Backdrop) saat menu terbuka */}
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.5)',
+            zIndex: 45,
+          }}
+        />
+      )}
+
+      {/* Drawer Menu Buka-Tutup */}
+      <aside
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: isOpen ? 0 : '-280px',
+          width: '260px',
+          height: '100vh',
+          background: '#fff',
+          zIndex: 50,
+          boxShadow: isOpen ? '-4px 0 20px rgba(0,0,0,0.15)' : 'none',
+          transition: 'right 0.25s ease-in-out',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '1.5rem 1rem',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingBottom: '1rem',
+            marginBottom: '1rem',
+            borderBottom: '1px solid var(--slate-200)',
+          }}
+        >
+          <span style={{ fontWeight: '700', color: 'var(--bpn-navy)', fontSize: '0.95rem' }}>
+            Menu Navigasi
+          </span>
+          <button
+            onClick={() => setIsOpen(false)}
+            aria-label="Tutup Menu"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--slate-500)',
+              fontSize: '1.2rem',
+              cursor: 'pointer',
+            }}
+          >
+            <i className="fa-solid fa-xmark"></i>
+          </button>
         </div>
-      </div>
 
-      <nav className="sidebar-nav">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`nav-item ${isActive ? 'active' : ''}`}
-            >
-              <i className={`fa-solid ${item.icon}`}></i>
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
-      </nav>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '10px',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: active ? '700' : '500',
+                  background: active ? 'var(--bpn-navy)' : 'transparent',
+                  color: active ? '#fff' : 'var(--slate-700)',
+                }}
+              >
+                <i
+                  className={`fa-solid ${item.icon}`}
+                  style={{ width: '20px', textAlign: 'center', color: active ? 'var(--bpn-gold)' : 'var(--slate-400)' }}
+                ></i>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-      <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--slate-300)', textAlign: 'center' }}>
-          &copy; 2026 ATR/BPN Subang
-        </p>
-      </div>
-    </aside>
+        <div style={{ fontSize: '0.75rem', color: 'var(--slate-400)', textAlign: 'center', paddingTop: '1rem', borderTop: '1px solid var(--slate-100)' }}>
+          ATR/BPN Kab. Subang
+        </div>
+      </aside>
+    </>
   );
 }

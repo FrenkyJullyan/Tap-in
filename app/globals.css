@@ -41,101 +41,21 @@ body {
   line-height: 1.6;
 }
 
-/* Layout Utama */
+/* Layout Utama (Sidebar berupa header di atas + menu geser di kanan) */
 .app-container {
-  display: flex;
+  display: block;
   min-height: 100vh;
 }
 
 .main-content {
-  flex: 1;
-  margin-left: 260px;
+  width: 100%;
+  margin: 0 auto;
   padding: 2rem;
-  transition: all 0.3s ease;
-}
-
-.main-content.no-sidebar {
-  margin-left: 0;
 }
 
 .content-body {
   max-width: 1200px;
   margin: 0 auto;
-}
-
-/* Sidebar */
-.sidebar {
-  width: 260px;
-  background: rgba(15, 41, 66, 0.95);
-  backdrop-filter: blur(12px);
-  color: white;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 50;
-}
-
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  margin-bottom: 1.5rem;
-}
-
-.sidebar-brand img {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
-}
-
-.sidebar-brand-text h2 {
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: var(--bpn-gold);
-}
-
-.sidebar-brand-text p {
-  font-size: 0.75rem;
-  color: var(--slate-300);
-}
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.8rem 1rem;
-  border-radius: 10px;
-  color: var(--slate-200);
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-}
-
-.nav-item:hover, .nav-item.active {
-  background: rgba(234, 179, 8, 0.15);
-  color: var(--bpn-gold);
-  border-left: 3px solid var(--bpn-gold);
 }
 
 /* Card & Glassmorphism */
@@ -230,6 +150,10 @@ body {
   font-size: 0.88rem;
   color: var(--slate-700);
   margin-bottom: 0.45rem;
+}
+
+button {
+  font-family: inherit;
 }
 
 input, select, textarea {
@@ -418,13 +342,7 @@ tr:hover td {
 }
 
 @media (max-width: 768px) {
-  .sidebar {
-    position: relative;
-    width: 100%;
-    height: auto;
-  }
   .main-content {
-    margin-left: 0;
     padding: 1rem;
   }
   .grid-2 {

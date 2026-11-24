@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -19,10 +20,15 @@ const fmtJam = (j?: string | null) => (j ? j.replace(/\./g, ':') : '-');
 
 const fmtTanggal = (t?: string | null) => {
   if (!t) return '-';
-  return new Date(t + 'T00:00:00').toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(t + 'T00:00:00').toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 };
 
-const capitalize = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '-');
+const capitalize = (s?: string | null) =>
+  s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
 
 const sensorTelp = (no?: string | null) => {
   if (!no) return '-';
@@ -33,15 +39,29 @@ const sensorTelp = (no?: string | null) => {
 const generateUniqueSiswaID = (nama: string, tglLahir: string) => {
   if (!nama || !tglLahir) return '';
   const [tahun, bulan, tanggal] = tglLahir.split('-');
-  const inisial = nama.trim().split(/\s+/).map((w) => w.charAt(0).toUpperCase()).join('');
+  const inisial = nama
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('');
   return `${tanggal}${bulan}${tahun.substring(2)}${inisial}`;
 };
 
 // CSV dengan pemisah ';' agar rapi di Excel Indonesia
-const downloadCSV = (filename: string, headers: string[], rows: (string | number | null | undefined)[][]) => {
+const downloadCSV = (
+  filename: string,
+  headers: string[],
+  rows: (string | number | null | undefined)[][]
+) => {
   const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const csv = '\uFEFF' + [headers, ...rows].map((r) => r.map(esc).join(';')).join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const csv =
+    '\uFEFF' +
+    [headers, ...rows].map((r) => r.map(esc).join(';')).join('\n');
+
+  const url = URL.createObjectURL(
+    new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  );
+
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
@@ -50,28 +70,92 @@ const downloadCSV = (filename: string, headers: string[], rows: (string | number
 };
 
 // ---------- Komponen kecil ----------
-const ctl: CSSProperties = { width: 'auto', padding: '0.5rem 0.75rem', fontSize: '0.85rem' };
+const ctl: CSSProperties = {
+  width: 'auto',
+  padding: '0.5rem 0.75rem',
+  fontSize: '0.85rem',
+};
+
 const nowrap: CSSProperties = { whiteSpace: 'nowrap' };
 
-const Field = ({ label, children }: { label: string; children: ReactNode }) => (
-  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>
+const Field = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) => (
+  <label
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.25rem',
+      fontSize: '0.75rem',
+      fontWeight: 700,
+      color: '#64748b',
+    }}
+  >
     {label}
     {children}
   </label>
 );
 
+// Status pulang
 const BadgePulang = ({ a }: { a: any }) => {
-  if (a.status_pulang_cepat === 'pending') return <span className="badge badge-warning">Menunggu ACC Admin</span>;
-  if (a.status_pulang_cepat === 'approved') return <span className="badge badge-success">Pulang Cepat (Disetujui)</span>;
-  if (a.status_pulang_cepat === 'rejected') return <span className="badge badge-danger">Pulang Cepat (Ditolak)</span>;
-  if (!a.jam_pulang) return <span className="badge" style={{ background: '#e2e8f0', color: '#475569' }}>Belum Pulang</span>;
+  // Izin dan sakit tidak memiliki kewajiban melakukan absensi pulang
+  if (['izin', 'sakit'].includes(a.status_masuk)) {
+    return (
+      <span
+        className="badge"
+        style={{ background: '#e2e8f0', color: '#475569' }}
+      >
+        Tidak Berlaku
+      </span>
+    );
+  }
+
+  if (a.status_pulang_cepat === 'pending') {
+    return <span className="badge badge-warning">Menunggu ACC Admin</span>;
+  }
+
+  if (a.status_pulang_cepat === 'approved') {
+    return (
+      <span className="badge badge-success">
+        Pulang Cepat (Disetujui)
+      </span>
+    );
+  }
+
+  if (a.status_pulang_cepat === 'rejected') {
+    return (
+      <span className="badge badge-danger">Pulang Cepat (Ditolak)</span>
+    );
+  }
+
+  if (!a.jam_pulang) {
+    return (
+      <span
+        className="badge"
+        style={{ background: '#e2e8f0', color: '#475569' }}
+      >
+        Belum Pulang
+      </span>
+    );
+  }
+
   return <span className="badge badge-success">Hadir / Normal</span>;
 };
 
-type Tab = 'verifikasi' | 'peserta' | 'absensi' | 'registrasi' | 'instansi';
+type Tab =
+  | 'verifikasi'
+  | 'peserta'
+  | 'absensi'
+  | 'registrasi'
+  | 'instansi';
 
 export default function AdminPage() {
   const router = useRouter();
+
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -112,21 +196,25 @@ export default function AdminPage() {
     setTodayDate(getTanggalLokal());
   }, []);
 
-  // Pulihkan sesi admin dan pantau perubahan status autentikasi
+  // Pulihkan sesi admin dan pantau perubahan autentikasi
   useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
+
       if (error) {
         setLoginError('Gagal memeriksa sesi admin. Silakan masuk kembali.');
         setIsAdminLoggedIn(false);
         return;
       }
+
       setIsAdminLoggedIn(!!data.session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAdminLoggedIn(!!session);
     });
 
@@ -139,11 +227,16 @@ export default function AdminPage() {
   // Fetch Data & Listener Realtime Supabase
   useEffect(() => {
     if (!isAdminLoggedIn) return;
+
     fetchAllData();
 
     const channel = supabase
       .channel('admin-realtime-absensi')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'absensi' }, () => fetchAllData())
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'absensi' },
+        () => fetchAllData()
+      )
       .subscribe();
 
     return () => {
@@ -151,15 +244,20 @@ export default function AdminPage() {
     };
   }, [isAdminLoggedIn]);
 
-  // Data diambil terpisah lalu digabung di sisi klien (tidak bergantung pada relasi FK)
+  // Data diambil terpisah lalu digabung di sisi klien
   const fetchAllData = async () => {
     const [sek, sis, abs] = await Promise.all([
       supabase.from('sekolah').select('*').order('nama', { ascending: true }),
       supabase.from('siswa').select('*').order('nama', { ascending: true }),
-      supabase.from('absensi').select('*').order('tanggal', { ascending: false }).range(0, 4999),
+      supabase
+        .from('absensi')
+        .select('*')
+        .order('tanggal', { ascending: false })
+        .range(0, 4999),
     ]);
 
     const err = sek.error || sis.error || abs.error;
+
     setDataError(err ? 'Gagal memuat data: ' + err.message : '');
     setSekolahList(sek.data || []);
     setSiswaList(sis.data || []);
@@ -167,28 +265,46 @@ export default function AdminPage() {
   };
 
   // ---------- Data turunan ----------
-  const sekolahMap = useMemo(() => Object.fromEntries(sekolahList.map((s) => [s.id, s])), [sekolahList]);
-  const siswaMap = useMemo(() => Object.fromEntries(siswaList.map((s) => [s.id, s])), [siswaList]);
+  const sekolahMap = useMemo(
+    () => Object.fromEntries(sekolahList.map((s) => [s.id, s])),
+    [sekolahList]
+  );
+
+  const siswaMap = useMemo(
+    () => Object.fromEntries(siswaList.map((s) => [s.id, s])),
+    [siswaList]
+  );
 
   const absensiFull = useMemo(
     () =>
       absensiList.map((a) => {
         const s = siswaMap[a.siswa_id];
         const idSekolah = s?.id_sekolah ?? a.sekolah_id;
-        return { ...a, siswa: s, idSekolah, sekolahNama: sekolahMap[idSekolah]?.nama || '-' };
+
+        return {
+          ...a,
+          siswa: s,
+          idSekolah,
+          sekolahNama: sekolahMap[idSekolah]?.nama || '-',
+        };
       }),
     [absensiList, siswaMap, sekolahMap]
   );
 
   const siswaAktif = siswaList.filter((s) => s.aktif);
   const absenHariIni = absensiFull.filter((a) => a.tanggal === todayDate);
-  const pendingCount = absensiFull.filter((a) => a.status_pulang_cepat === 'pending').length;
+  const pendingCount = absensiFull.filter(
+    (a) => a.status_pulang_cepat === 'pending'
+  ).length;
 
   // ---------- Aksi ----------
   const handleAdminLogin = async () => {
     const email = username.trim();
+
     if (!email || !password) {
-      setLoginError('Masukkan email dan kata sandi admin terlebih dahulu.');
+      setLoginError(
+        'Masukkan email dan kata sandi admin terlebih dahulu.'
+      );
       return;
     }
 
@@ -220,12 +336,58 @@ export default function AdminPage() {
     setTab('verifikasi');
   };
 
+  // Membuka dokumen izin/sakit dari Supabase Storage
+  const handleLihatDokumenIzin = async (path: string) => {
+    if (!path) {
+      alert('Dokumen tidak ditemukan.');
+      return;
+    }
+
+    // Buka tab terlebih dahulu agar tidak diblokir browser
+    const newWindow = window.open('', '_blank');
+
+    if (!newWindow) {
+      alert('Browser memblokir tab baru. Izinkan pop-up untuk situs ini.');
+      return;
+    }
+
+    newWindow.document.write(
+      '<p style="font-family:Arial;padding:20px">Memuat dokumen...</p>'
+    );
+
+    const { data, error } = await supabase.storage
+      .from('dokumen-perizinan')
+      .createSignedUrl(path, 120);
+
+    if (error || !data?.signedUrl) {
+      newWindow.close();
+      alert(
+        'Gagal membuka dokumen: ' +
+          (error?.message || 'URL dokumen tidak tersedia')
+      );
+      return;
+    }
+
+    newWindow.location.href = data.signedUrl;
+  };
+
   const handleTambahSekolah = async () => {
     const nama = namaSekolahBaru.trim();
-    if (!nama) return alert('Masukkan nama instansi mitra!');
-    if (sekolahList.some((s) => s.nama.toLowerCase() === nama.toLowerCase())) return alert('Instansi tersebut sudah terdaftar!');
 
-    const { error } = await supabase.from('sekolah').insert([{ nama, aktif: true }]);
+    if (!nama) return alert('Masukkan nama instansi mitra!');
+
+    if (
+      sekolahList.some(
+        (s) => s.nama.toLowerCase() === nama.toLowerCase()
+      )
+    ) {
+      return alert('Instansi tersebut sudah terdaftar!');
+    }
+
+    const { error } = await supabase
+      .from('sekolah')
+      .insert([{ nama, aktif: true }]);
+
     if (error) {
       alert(`Gagal menambah sekolah: ${error.message}`);
     } else {
@@ -235,7 +397,11 @@ export default function AdminPage() {
   };
 
   const toggleSekolah = async (id: number, status: boolean) => {
-    const { error } = await supabase.from('sekolah').update({ aktif: status }).eq('id', id);
+    const { error } = await supabase
+      .from('sekolah')
+      .update({ aktif: status })
+      .eq('id', id);
+
     if (error) alert('Gagal memperbarui instansi: ' + error.message);
     else fetchAllData();
   };
@@ -250,12 +416,25 @@ export default function AdminPage() {
     }
 
     const generatedID = generateUniqueSiswaID(nama, tglLahirBaru);
-    if (siswaList.some((s) => (s.nis || '').toUpperCase() === generatedID)) {
-      return alert(`ID Absen ${generatedID} sudah dipakai peserta lain. Periksa kembali nama dan tanggal lahir.`);
+
+    if (
+      siswaList.some(
+        (s) => (s.nis || '').toUpperCase() === generatedID
+      )
+    ) {
+      return alert(
+        `ID Absen ${generatedID} sudah dipakai peserta lain. Periksa kembali nama dan tanggal lahir.`
+      );
     }
 
     const { error } = await supabase.from('siswa').insert([
-      { nama, nis: generatedID, no_telp: telp, id_sekolah: idSekolah, aktif: true },
+      {
+        nama,
+        nis: generatedID,
+        no_telp: telp,
+        id_sekolah: idSekolah,
+        aktif: true,
+      },
     ]);
 
     if (error) {
@@ -271,67 +450,165 @@ export default function AdminPage() {
 
   const handleToggleSiswa = async (s: any) => {
     const aksi = s.aktif ? 'Nonaktifkan' : 'Aktifkan kembali';
-    if (!confirm(`${aksi} status magang untuk peserta ${s.nama}?`)) return;
-    const { error } = await supabase.from('siswa').update({ aktif: !s.aktif }).eq('id', s.id);
+
+    if (!confirm(`${aksi} status magang untuk peserta ${s.nama}?`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from('siswa')
+      .update({ aktif: !s.aktif })
+      .eq('id', s.id);
+
     if (error) alert('Gagal memperbarui peserta: ' + error.message);
     else fetchAllData();
   };
 
   // Admin menyetujui atau menolak pulang cepat
-  const handleUpdateStatusPulangCepat = async (absensiId: number, status: 'approved' | 'rejected') => {
-    const { error } = await supabase.from('absensi').update({ status_pulang_cepat: status }).eq('id', absensiId);
+  const handleUpdateStatusPulangCepat = async (
+    absensiId: number,
+    status: 'approved' | 'rejected'
+  ) => {
+    const { error } = await supabase
+      .from('absensi')
+      .update({ status_pulang_cepat: status })
+      .eq('id', absensiId);
+
     if (error) alert('Gagal memperbarui status: ' + error.message);
     else fetchAllData();
   };
 
   // ---------- Verifikasi pulang cepat ----------
   const verList = absensiFull.filter((a) =>
-    verStatus === 'all' ? ['pending', 'approved', 'rejected'].includes(a.status_pulang_cepat) : a.status_pulang_cepat === verStatus
+    verStatus === 'all'
+      ? ['pending', 'approved', 'rejected'].includes(
+          a.status_pulang_cepat
+        )
+      : a.status_pulang_cepat === verStatus
   );
 
-  // ---------- Daftar peserta (per sekolah / keseluruhan) ----------
-  const statusCocok = (s: any) => pesertaStatus === 'all' || (pesertaStatus === 'aktif' ? s.aktif : !s.aktif);
+  // ---------- Daftar peserta ----------
+  const statusCocok = (s: any) =>
+    pesertaStatus === 'all' ||
+    (pesertaStatus === 'aktif' ? s.aktif : !s.aktif);
 
   const pesertaRows = useMemo(() => {
     const q = pesertaCari.trim().toLowerCase();
+
     return siswaList
       .filter((s) => statusCocok(s))
-      .filter((s) => pesertaSekolah === 'all' || String(s.id_sekolah) === pesertaSekolah)
-      .filter((s) => !q || (s.nama || '').toLowerCase().includes(q) || (s.nis || '').toLowerCase().includes(q))
+      .filter(
+        (s) =>
+          pesertaSekolah === 'all' ||
+          String(s.id_sekolah) === pesertaSekolah
+      )
+      .filter(
+        (s) =>
+          !q ||
+          (s.nama || '').toLowerCase().includes(q) ||
+          (s.nis || '').toLowerCase().includes(q)
+      )
       .sort(
         (a, b) =>
-          (sekolahMap[a.id_sekolah]?.nama || '').localeCompare(sekolahMap[b.id_sekolah]?.nama || '') ||
-          (a.nama || '').localeCompare(b.nama || '')
+          (sekolahMap[a.id_sekolah]?.nama || '').localeCompare(
+            sekolahMap[b.id_sekolah]?.nama || ''
+          ) || (a.nama || '').localeCompare(b.nama || '')
       );
-  }, [siswaList, pesertaSekolah, pesertaStatus, pesertaCari, sekolahMap]);
+  }, [
+    siswaList,
+    pesertaSekolah,
+    pesertaStatus,
+    pesertaCari,
+    sekolahMap,
+  ]);
 
   const handleExportPeserta = () => {
-    const label = pesertaSekolah === 'all' ? 'Semua' : (sekolahMap[Number(pesertaSekolah)]?.nama || 'Sekolah').replace(/\s+/g, '_');
+    const label =
+      pesertaSekolah === 'all'
+        ? 'Semua'
+        : (sekolahMap[Number(pesertaSekolah)]?.nama || 'Sekolah').replace(
+            /\s+/g,
+            '_'
+          );
+
     downloadCSV(
       `Data_Peserta_${label}_${todayDate || 'export'}.csv`,
       ['Nama Peserta', 'ID Absen', 'Asal Instansi', 'Status'],
-      pesertaRows.map((s) => [s.nama, s.nis, sekolahMap[s.id_sekolah]?.nama || '-', s.aktif ? 'Aktif' : 'Nonaktif'])
+      pesertaRows.map((s) => [
+        s.nama,
+        s.nis,
+        sekolahMap[s.id_sekolah]?.nama || '-',
+        s.aktif ? 'Aktif' : 'Nonaktif',
+      ])
     );
   };
 
-  // ---------- Rekap absensi (keseluruhan / per sekolah / perorangan) ----------
-  const siswaDropdown = siswaList.filter((s) => rekapSekolah === 'all' || String(s.id_sekolah) === rekapSekolah);
+  // ---------- Rekap absensi ----------
+  const siswaDropdown = siswaList.filter(
+    (s) =>
+      rekapSekolah === 'all' ||
+      String(s.id_sekolah) === rekapSekolah
+  );
 
   const rekapRows = useMemo(() => {
     return absensiFull
       .filter((a) => {
-        if (rekapSekolah !== 'all' && String(a.idSekolah) !== rekapSekolah) return false;
-        if (rekapSiswa !== 'all' && String(a.siswa_id) !== rekapSiswa) return false;
+        if (
+          rekapSekolah !== 'all' &&
+          String(a.idSekolah) !== rekapSekolah
+        )
+          return false;
+
+        if (
+          rekapSiswa !== 'all' &&
+          String(a.siswa_id) !== rekapSiswa
+        )
+          return false;
+
         if (dariTgl && a.tanggal < dariTgl) return false;
         if (sampaiTgl && a.tanggal > sampaiTgl) return false;
-        if (rekapStatus !== 'all' && a.status_masuk !== rekapStatus) return false;
-        if (rekapPulang === 'belum' && a.jam_pulang) return false;
-        if (rekapPulang === 'normal' && (!a.jam_pulang || a.status_pulang_cepat)) return false;
-        if (['pending', 'approved', 'rejected'].includes(rekapPulang) && a.status_pulang_cepat !== rekapPulang) return false;
+
+        if (
+          rekapStatus !== 'all' &&
+          a.status_masuk !== rekapStatus
+        )
+          return false;
+
+        // Izin dan sakit tidak dimasukkan ke filter status pulang
+        if (
+          rekapPulang === 'belum' &&
+          (a.jam_pulang || ['izin', 'sakit'].includes(a.status_masuk))
+        )
+          return false;
+
+        if (
+          rekapPulang === 'normal' &&
+          (!a.jam_pulang || a.status_pulang_cepat)
+        )
+          return false;
+
+        if (
+          ['pending', 'approved', 'rejected'].includes(rekapPulang) &&
+          a.status_pulang_cepat !== rekapPulang
+        )
+          return false;
+
         return true;
       })
-      .sort((a, b) => b.tanggal.localeCompare(a.tanggal) || (a.siswa?.nama || '').localeCompare(b.siswa?.nama || ''));
-  }, [absensiFull, rekapSekolah, rekapSiswa, dariTgl, sampaiTgl, rekapStatus, rekapPulang]);
+      .sort(
+        (a, b) =>
+          b.tanggal.localeCompare(a.tanggal) ||
+          (a.siswa?.nama || '').localeCompare(b.siswa?.nama || '')
+      );
+  }, [
+    absensiFull,
+    rekapSekolah,
+    rekapSiswa,
+    dariTgl,
+    sampaiTgl,
+    rekapStatus,
+    rekapPulang,
+  ]);
 
   const ringkas = {
     total: rekapRows.length,
@@ -352,16 +629,33 @@ export default function AdminPage() {
   };
 
   const handleExportRekap = () => {
-    const siswaDipilih = rekapSiswa !== 'all' ? siswaMap[Number(rekapSiswa)] : null;
+    const siswaDipilih =
+      rekapSiswa !== 'all' ? siswaMap[Number(rekapSiswa)] : null;
+
     const label = siswaDipilih
       ? siswaDipilih.nama.replace(/\s+/g, '_')
       : rekapSekolah !== 'all'
-      ? (sekolahMap[Number(rekapSekolah)]?.nama || 'Sekolah').replace(/\s+/g, '_')
-      : 'Semua';
+        ? (sekolahMap[Number(rekapSekolah)]?.nama || 'Sekolah').replace(
+            /\s+/g,
+            '_'
+          )
+        : 'Semua';
 
     downloadCSV(
       `Laporan_Absensi_${label}_${todayDate || 'export'}.csv`,
-      ['Tanggal', 'Nama Peserta', 'ID Absen', 'Instansi Asal', 'Jam Masuk', 'Jam Pulang', 'Status Kehadiran', 'Status Pulang Cepat', 'Alasan Pulang Cepat'],
+      [
+        'Tanggal',
+        'Nama Peserta',
+        'ID Absen',
+        'Instansi Asal',
+        'Jam Masuk',
+        'Jam Pulang',
+        'Status Kehadiran',
+        'Status Pulang Cepat',
+        'Alasan Pulang Cepat',
+        'Keterangan Izin/Sakit',
+        'Dokumen Izin/Sakit',
+      ],
       rekapRows.map((a) => [
         a.tanggal,
         a.siswa?.nama || '-',
@@ -372,6 +666,8 @@ export default function AdminPage() {
         capitalize(a.status_masuk),
         a.status_pulang_cepat || '-',
         a.alasan_pulang_cepat || '-',
+        a.keterangan || '-',
+        a.dokumen_perizinan || '-',
       ])
     );
   };
@@ -379,36 +675,79 @@ export default function AdminPage() {
   // ======================= LOGIN ADMIN =======================
   if (!isAdminLoggedIn) {
     return (
-      <div style={{ minHeight: '100vh', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-        <div className="card animated-fade-in" style={{ width: '100%', maxWidth: '420px', margin: 0, padding: '2rem', borderRadius: '20px' }}>
+      <div
+        style={{
+          minHeight: '100vh',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+        }}
+      >
+        <div
+          className="card animated-fade-in"
+          style={{
+            width: '100%',
+            maxWidth: '420px',
+            margin: 0,
+            padding: '2rem',
+            borderRadius: '20px',
+          }}
+        >
           <div className="card-header">
-            <h2 style={{ color: 'var(--bpn-gold-dark)' }}><i className="fas fa-user-shield"></i> Portal Pembimbing & Admin</h2>
+            <h2 style={{ color: 'var(--bpn-gold-dark)' }}>
+              <i className="fas fa-user-shield"></i> Portal Pembimbing & Admin
+            </h2>
           </div>
+
           {loginError && (
             <div className="alert alert-error">
               <i className="fas fa-times-circle"></i> {loginError}
             </div>
           )}
+
           <div className="form-group">
-            <label><i className="fas fa-user"></i> Email Admin</label>
-            <input type="email" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Masukkan email admin" autoComplete="username" />
+            <label>
+              <i className="fas fa-user"></i> Email Admin
+            </label>
+            <input
+              type="email"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Masukkan email admin"
+              autoComplete="username"
+            />
           </div>
+
           <div className="form-group">
-            <label><i className="fas fa-key"></i> Kata Sandi</label>
+            <label>
+              <i className="fas fa-key"></i> Kata Sandi
+            </label>
             <input
               type="password"
               value={password}
               autoComplete="current-password"
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+              onKeyDown={(e) =>
+                e.key === 'Enter' && handleAdminLogin()
+              }
             />
           </div>
-          <button className="btn btn-primary btn-full" onClick={handleAdminLogin}>
+
+          <button
+            className="btn btn-primary btn-full"
+            onClick={handleAdminLogin}
+          >
             <i className="fas fa-lock-open"></i> Otorisasi Masuk
           </button>
+
           <div className="text-center mt-3">
-            <button className="btn btn-danger btn-sm" onClick={() => router.push('/')}>
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => router.push('/')}
+            >
               <i className="fas fa-arrow-left"></i> Kembali ke Menu Utama
             </button>
           </div>
@@ -418,17 +757,31 @@ export default function AdminPage() {
   }
 
   // ======================= DASHBOARD ADMIN =======================
-  const tabs: { id: Tab; label: string; icon: string; badge?: number }[] = [
-    { id: 'verifikasi', label: 'Verifikasi Pulang Cepat', icon: 'fa-user-clock', badge: pendingCount },
+  const tabs: {
+    id: Tab;
+    label: string;
+    icon: string;
+    badge?: number;
+  }[] = [
+    {
+      id: 'verifikasi',
+      label: 'Verifikasi Pulang Cepat',
+      icon: 'fa-user-clock',
+      badge: pendingCount,
+    },
     { id: 'peserta', label: 'Daftar Peserta', icon: 'fa-address-book' },
     { id: 'absensi', label: 'Data Absensi', icon: 'fa-file-export' },
-    { id: 'registrasi', label: 'Registrasi Peserta', icon: 'fa-user-plus' },
+    {
+      id: 'registrasi',
+      label: 'Registrasi Peserta',
+      icon: 'fa-user-plus',
+    },
     { id: 'instansi', label: 'Instansi Mitra', icon: 'fa-building' },
   ];
 
   return (
     <div style={{ minHeight: '100vh', width: '100%' }}>
-      {/* Header + menu horizontal (tetap di atas saat digulir) */}
+      {/* Header + menu horizontal */}
       <div style={{ position: 'sticky', top: 0, zIndex: 40 }}>
         <header
           style={{
@@ -441,17 +794,55 @@ export default function AdminPage() {
             gap: '1rem',
           }}
         >
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', color: '#fff' }}>
-            <img src="/logo-bpn.jpg" alt="Logo ATR/BPN" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          <Link
+            href="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              textDecoration: 'none',
+              color: '#fff',
+            }}
+          >
+            <img
+              src="/logo-bpn.jpg"
+              alt="Logo ATR/BPN"
+              style={{
+                width: 36,
+                height: 36,
+                objectFit: 'contain',
+              }}
+            />
+
             <div>
-              <div style={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.2 }}>Panel Pembimbing & Admin</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--bpn-gold)' }}>Tap-in ATR/BPN Kabupaten Subang</div>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  lineHeight: 1.2,
+                }}
+              >
+                Panel Pembimbing & Admin
+              </div>
+              <div
+                style={{
+                  fontSize: '0.7rem',
+                  color: 'var(--bpn-gold)',
+                }}
+              >
+                Tap-in ATR/BPN Kabupaten Subang
+              </div>
             </div>
           </Link>
+
           <button
             className="btn btn-sm"
             onClick={handleLogout}
-            style={{ background: '#dc2626', color: '#fff', whiteSpace: 'nowrap' }}
+            style={{
+              background: '#dc2626',
+              color: '#fff',
+              whiteSpace: 'nowrap',
+            }}
           >
             <i className="fas fa-sign-out-alt"></i> Keluar
           </button>
@@ -469,6 +860,7 @@ export default function AdminPage() {
         >
           {tabs.map((t) => {
             const aktif = tab === t.id;
+
             return (
               <button
                 key={t.id}
@@ -481,16 +873,29 @@ export default function AdminPage() {
                   padding: '0.95rem 1.1rem',
                   background: 'transparent',
                   border: 'none',
-                  borderBottom: `3px solid ${aktif ? 'var(--bpn-gold)' : 'transparent'}`,
-                  color: aktif ? 'var(--bpn-navy)' : 'var(--slate-500)',
+                  borderBottom: `3px solid ${
+                    aktif ? 'var(--bpn-gold)' : 'transparent'
+                  }`,
+                  color: aktif
+                    ? 'var(--bpn-navy)'
+                    : 'var(--slate-500)',
                   fontWeight: aktif ? 800 : 600,
                   fontSize: '0.9rem',
                   cursor: 'pointer',
                 }}
               >
                 <i className={`fas ${t.icon}`}></i> {t.label}
+
                 {!!t.badge && (
-                  <span style={{ background: '#dc2626', color: '#fff', borderRadius: 999, fontSize: '0.7rem', padding: '0.05rem 0.5rem' }}>
+                  <span
+                    style={{
+                      background: '#dc2626',
+                      color: '#fff',
+                      borderRadius: 999,
+                      fontSize: '0.7rem',
+                      padding: '0.05rem 0.5rem',
+                    }}
+                  >
                     {t.badge}
                   </span>
                 )}
@@ -500,22 +905,50 @@ export default function AdminPage() {
         </nav>
       </div>
 
-      <main style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
-          {dataError && (
-            <div className="alert alert-error">
-              <i className="fas fa-exclamation-circle"></i> {dataError}
-            </div>
-          )}
+      <main
+        style={{
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '1.5rem 1rem 3rem',
+        }}
+      >
+        {dataError && (
+          <div className="alert alert-error">
+            <i className="fas fa-exclamation-circle"></i> {dataError}
+          </div>
+        )}
 
-
-          {tab === 'verifikasi' && (
-            <>
-          <div className="card animated-fade-in" style={{ borderLeft: '4px solid var(--warning)' }}>
+        {/* ================= VERIFIKASI ================= */}
+        {tab === 'verifikasi' && (
+          <div
+            className="card animated-fade-in"
+            style={{ borderLeft: '4px solid var(--warning)' }}
+          >
             <div className="card-header">
-              <h3><i className="fas fa-user-clock"></i> Verifikasi Pengajuan Pulang Cepat (&lt; 16.00 WIB)</h3>
-              <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                {pendingCount > 0 && <span className="badge badge-warning">{pendingCount} Menunggu Persetujuan</span>}
-                <select value={verStatus} onChange={(e) => setVerStatus(e.target.value)} style={ctl}>
+              <h3>
+                <i className="fas fa-user-clock"></i> Verifikasi Pengajuan
+                Pulang Cepat (&lt; 16.00 WIB)
+              </h3>
+
+              <div
+                className="flex gap-2"
+                style={{
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                {pendingCount > 0 && (
+                  <span className="badge badge-warning">
+                    {pendingCount} Menunggu Persetujuan
+                  </span>
+                )}
+
+                <select
+                  value={verStatus}
+                  onChange={(e) => setVerStatus(e.target.value)}
+                  style={ctl}
+                >
                   <option value="pending">Menunggu</option>
                   <option value="approved">Disetujui</option>
                   <option value="rejected">Ditolak</option>
@@ -523,7 +956,11 @@ export default function AdminPage() {
                 </select>
               </div>
             </div>
-            <div className="table-wrapper" style={{ maxHeight: '320px', overflowY: 'auto' }}>
+
+            <div
+              className="table-wrapper"
+              style={{ maxHeight: '320px', overflowY: 'auto' }}
+            >
               <table>
                 <thead>
                   <tr>
@@ -535,10 +972,15 @@ export default function AdminPage() {
                     <th>Aksi Pembimbing</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {verList.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center" style={{ color: 'var(--slate-500)' }}>
+                      <td
+                        colSpan={6}
+                        className="text-center"
+                        style={{ color: 'var(--slate-500)' }}
+                      >
                         Tidak ada pengajuan pulang cepat pada kategori ini.
                       </td>
                     </tr>
@@ -546,28 +988,64 @@ export default function AdminPage() {
                     verList.map((a) => (
                       <tr key={a.id}>
                         <td style={nowrap}>{fmtTanggal(a.tanggal)}</td>
-                        <td style={nowrap}><strong>{a.siswa?.nama || '-'}</strong></td>
+                        <td style={nowrap}>
+                          <strong>{a.siswa?.nama || '-'}</strong>
+                        </td>
                         <td>{a.sekolahNama}</td>
-                        <td style={nowrap}><code>{fmtJam(a.jam_pulang)}</code></td>
-                        <td><em>"{a.alasan_pulang_cepat || '-'}"</em></td>
+                        <td style={nowrap}>
+                          <code>{fmtJam(a.jam_pulang)}</code>
+                        </td>
+                        <td>
+                          <em>"{a.alasan_pulang_cepat || '-'}"</em>
+                        </td>
                         <td style={nowrap}>
                           {a.status_pulang_cepat === 'pending' ? (
                             <div className="flex gap-2">
-                              <button className="btn btn-success btn-sm" onClick={() => handleUpdateStatusPulangCepat(a.id, 'approved')}>
+                              <button
+                                className="btn btn-success btn-sm"
+                                onClick={() =>
+                                  handleUpdateStatusPulangCepat(
+                                    a.id,
+                                    'approved'
+                                  )
+                                }
+                              >
                                 <i className="fas fa-check"></i> Setujui
                               </button>
-                              <button className="btn btn-danger btn-sm" onClick={() => handleUpdateStatusPulangCepat(a.id, 'rejected')}>
+
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() =>
+                                  handleUpdateStatusPulangCepat(
+                                    a.id,
+                                    'rejected'
+                                  )
+                                }
+                              >
                                 <i className="fas fa-times"></i> Tolak
                               </button>
                             </div>
                           ) : (
-                            <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                            <div
+                              className="flex gap-2"
+                              style={{ alignItems: 'center' }}
+                            >
                               <BadgePulang a={a} />
+
                               <button
                                 className="btn btn-outline btn-sm"
-                                onClick={() => handleUpdateStatusPulangCepat(a.id, a.status_pulang_cepat === 'approved' ? 'rejected' : 'approved')}
+                                onClick={() =>
+                                  handleUpdateStatusPulangCepat(
+                                    a.id,
+                                    a.status_pulang_cepat === 'approved'
+                                      ? 'rejected'
+                                      : 'approved'
+                                  )
+                                }
                               >
-                                {a.status_pulang_cepat === 'approved' ? 'Ubah: Tolak' : 'Ubah: Setujui'}
+                                {a.status_pulang_cepat === 'approved'
+                                  ? 'Ubah: Tolak'
+                                  : 'Ubah: Setujui'}
                               </button>
                             </div>
                           )}
@@ -579,65 +1057,146 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+        )}
 
-
-            </>
-          )}
-
-          {tab === 'peserta' && (
-            <>
+        {/* ================= DAFTAR PESERTA ================= */}
+        {tab === 'peserta' && (
           <div className="card animated-fade-in">
             <div className="card-header">
-              <h3><i className="fas fa-address-book"></i> Daftar Peserta Magang ({pesertaRows.length})</h3>
-              <button className="btn btn-success btn-sm" onClick={handleExportPeserta} disabled={pesertaRows.length === 0}>
+              <h3>
+                <i className="fas fa-address-book"></i> Daftar Peserta
+                Magang ({pesertaRows.length})
+              </h3>
+
+              <button
+                className="btn btn-success btn-sm"
+                onClick={handleExportPeserta}
+                disabled={pesertaRows.length === 0}
+              >
                 <i className="fas fa-file-excel"></i> Export Peserta (CSV)
               </button>
             </div>
 
-            <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1rem' }}>
+            <div
+              className="flex gap-2"
+              style={{
+                flexWrap: 'wrap',
+                alignItems: 'flex-end',
+                marginBottom: '1rem',
+              }}
+            >
               <Field label="Instansi / Sekolah">
-                <select value={pesertaSekolah} onChange={(e) => setPesertaSekolah(e.target.value)} style={{ ...ctl, minWidth: 220 }}>
+                <select
+                  value={pesertaSekolah}
+                  onChange={(e) => setPesertaSekolah(e.target.value)}
+                  style={{ ...ctl, minWidth: 220 }}
+                >
                   <option value="all">Semua Instansi (Keseluruhan)</option>
                   {sekolahList.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.nama} ({siswaList.filter((x) => x.id_sekolah === s.id && statusCocok(x)).length})
+                      {s.nama} (
+                      {
+                        siswaList.filter(
+                          (x) =>
+                            x.id_sekolah === s.id && statusCocok(x)
+                        ).length
+                      }
+                      )
                     </option>
                   ))}
                 </select>
               </Field>
+
               <Field label="Status peserta">
-                <select value={pesertaStatus} onChange={(e) => setPesertaStatus(e.target.value)} style={ctl}>
+                <select
+                  value={pesertaStatus}
+                  onChange={(e) => setPesertaStatus(e.target.value)}
+                  style={ctl}
+                >
                   <option value="aktif">Aktif</option>
                   <option value="nonaktif">Nonaktif</option>
                   <option value="all">Semua</option>
                 </select>
               </Field>
+
               <Field label="Cari nama / ID">
-                <input type="text" value={pesertaCari} onChange={(e) => setPesertaCari(e.target.value)} placeholder="Ketik untuk mencari..." style={{ ...ctl, minWidth: 200 }} />
+                <input
+                  type="text"
+                  value={pesertaCari}
+                  onChange={(e) => setPesertaCari(e.target.value)}
+                  placeholder="Ketik untuk mencari..."
+                  style={{ ...ctl, minWidth: 200 }}
+                />
               </Field>
             </div>
 
-            <div className="table-wrapper" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+            <div
+              className="table-wrapper"
+              style={{ maxHeight: '420px', overflowY: 'auto' }}
+            >
               <table>
                 <thead>
-                  <tr><th>Nama Peserta</th><th>ID Absen</th><th>Asal Instansi</th><th>Kontak WA</th><th>Status</th><th>Tindakan</th></tr>
+                  <tr>
+                    <th>Nama Peserta</th>
+                    <th>ID Absen</th>
+                    <th>Asal Instansi</th>
+                    <th>Kontak WA</th>
+                    <th>Status</th>
+                    <th>Tindakan</th>
+                  </tr>
                 </thead>
+
                 <tbody>
                   {pesertaRows.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center">Tidak ada peserta yang cocok dengan filter ini</td></tr>
+                    <tr>
+                      <td colSpan={6} className="text-center">
+                        Tidak ada peserta yang cocok dengan filter ini
+                      </td>
+                    </tr>
                   ) : (
                     pesertaRows.map((s) => (
                       <tr key={s.id}>
-                        <td style={nowrap}><strong>{s.nama}</strong></td>
+                        <td style={nowrap}>
+                          <strong>{s.nama}</strong>
+                        </td>
                         <td>
-                          <code style={{ background: 'var(--slate-100)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>{s.nis}</code>
+                          <code
+                            style={{
+                              background: 'var(--slate-100)',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '4px',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {s.nis}
+                          </code>
                         </td>
                         <td>{sekolahMap[s.id_sekolah]?.nama || '-'}</td>
                         <td style={nowrap}>{sensorTelp(s.no_telp)}</td>
-                        <td>{s.aktif ? <span className="badge badge-success">Aktif</span> : <span className="badge badge-danger">Nonaktif</span>}</td>
+                        <td>
+                          {s.aktif ? (
+                            <span className="badge badge-success">
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="badge badge-danger">
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
                         <td style={nowrap}>
-                          <button className={`btn btn-sm ${s.aktif ? 'btn-danger' : 'btn-primary'}`} onClick={() => handleToggleSiswa(s)}>
-                            <i className={`fas ${s.aktif ? 'fa-user-times' : 'fa-user-check'}`}></i> {s.aktif ? 'Nonaktifkan' : 'Aktifkan'}
+                          <button
+                            className={`btn btn-sm ${
+                              s.aktif ? 'btn-danger' : 'btn-primary'
+                            }`}
+                            onClick={() => handleToggleSiswa(s)}
+                          >
+                            <i
+                              className={`fas ${
+                                s.aktif ? 'fa-user-times' : 'fa-user-check'
+                              }`}
+                            ></i>{' '}
+                            {s.aktif ? 'Nonaktifkan' : 'Aktifkan'}
                           </button>
                         </td>
                       </tr>
@@ -647,60 +1206,106 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+        )}
 
-
-            </>
-          )}
-
-          {tab === 'absensi' && (
-            <>
+        {/* ================= DATA ABSENSI ================= */}
+        {tab === 'absensi' && (
           <div className="card animated-fade-in">
             <div className="card-header">
-              <h3><i className="fas fa-file-export"></i> Data Absensi ({rekapRows.length})</h3>
-              <button className="btn btn-success btn-sm" onClick={handleExportRekap} disabled={rekapRows.length === 0}>
+              <h3>
+                <i className="fas fa-file-export"></i> Data Absensi (
+                {rekapRows.length})
+              </h3>
+
+              <button
+                className="btn btn-success btn-sm"
+                onClick={handleExportRekap}
+                disabled={rekapRows.length === 0}
+              >
                 <i className="fas fa-file-excel"></i> Export Data (CSV)
               </button>
             </div>
 
-            <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.9rem' }}>
+            {/* Filter */}
+            <div
+              className="flex gap-2"
+              style={{
+                flexWrap: 'wrap',
+                alignItems: 'flex-end',
+                marginBottom: '0.9rem',
+              }}
+            >
               <Field label="Instansi / Sekolah">
                 <select
                   value={rekapSekolah}
-                  onChange={(e) => { setRekapSekolah(e.target.value); setRekapSiswa('all'); }}
+                  onChange={(e) => {
+                    setRekapSekolah(e.target.value);
+                    setRekapSiswa('all');
+                  }}
                   style={{ ...ctl, minWidth: 210 }}
                 >
                   <option value="all">Semua Instansi (Keseluruhan)</option>
                   {sekolahList.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nama}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Peserta (perorangan)">
-                <select value={rekapSiswa} onChange={(e) => setRekapSiswa(e.target.value)} style={{ ...ctl, minWidth: 220 }}>
-                  <option value="all">Semua Peserta</option>
-                  {siswaDropdown.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.nama} ({s.nis}){s.aktif ? '' : ' - nonaktif'}
+                      {s.nama}
                     </option>
                   ))}
                 </select>
               </Field>
+
+              <Field label="Peserta (perorangan)">
+                <select
+                  value={rekapSiswa}
+                  onChange={(e) => setRekapSiswa(e.target.value)}
+                  style={{ ...ctl, minWidth: 220 }}
+                >
+                  <option value="all">Semua Peserta</option>
+                  {siswaDropdown.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nama} ({s.nis})
+                      {s.aktif ? '' : ' - nonaktif'}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
               <Field label="Dari tanggal">
-                <input type="date" value={dariTgl} onChange={(e) => setDariTgl(e.target.value)} style={ctl} />
+                <input
+                  type="date"
+                  value={dariTgl}
+                  onChange={(e) => setDariTgl(e.target.value)}
+                  style={ctl}
+                />
               </Field>
+
               <Field label="Sampai tanggal">
-                <input type="date" value={sampaiTgl} onChange={(e) => setSampaiTgl(e.target.value)} style={ctl} />
+                <input
+                  type="date"
+                  value={sampaiTgl}
+                  onChange={(e) => setSampaiTgl(e.target.value)}
+                  style={ctl}
+                />
               </Field>
+
               <Field label="Kehadiran">
-                <select value={rekapStatus} onChange={(e) => setRekapStatus(e.target.value)} style={ctl}>
+                <select
+                  value={rekapStatus}
+                  onChange={(e) => setRekapStatus(e.target.value)}
+                  style={ctl}
+                >
                   <option value="all">Semua</option>
                   <option value="hadir">Hadir</option>
                   <option value="sakit">Sakit</option>
                   <option value="izin">Izin</option>
                 </select>
               </Field>
+
               <Field label="Status pulang">
-                <select value={rekapPulang} onChange={(e) => setRekapPulang(e.target.value)} style={ctl}>
+                <select
+                  value={rekapPulang}
+                  onChange={(e) => setRekapPulang(e.target.value)}
+                  style={ctl}
+                >
                   <option value="all">Semua</option>
                   <option value="normal">Pulang normal</option>
                   <option value="pending">Menunggu ACC</option>
@@ -712,16 +1317,59 @@ export default function AdminPage() {
             </div>
 
             {/* Rentang cepat */}
-            <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--slate-500)', fontWeight: 700 }}>Rentang cepat:</span>
-              <button className="btn btn-outline btn-sm" onClick={() => setRentang(1)}>Hari ini</button>
-              <button className="btn btn-outline btn-sm" onClick={() => setRentang(7)}>7 hari</button>
-              <button className="btn btn-outline btn-sm" onClick={() => setRentang(30)}>30 hari</button>
-              <button className="btn btn-outline btn-sm" onClick={() => setRentang('all')}>Semua tanggal</button>
+            <div
+              className="flex gap-2"
+              style={{
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                marginBottom: '1rem',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--slate-500)',
+                  fontWeight: 700,
+                }}
+              >
+                Rentang cepat:
+              </span>
+
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setRentang(1)}
+              >
+                Hari ini
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setRentang(7)}
+              >
+                7 hari
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setRentang(30)}
+              >
+                30 hari
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setRentang('all')}
+              >
+                Semua tanggal
+              </button>
             </div>
 
-            {/* Ringkasan sesuai filter */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.6rem', marginBottom: '1rem' }}>
+            {/* Ringkasan */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+                gap: '0.6rem',
+                marginBottom: '1rem',
+              }}
+            >
               {[
                 ['Total Log', ringkas.total, 'var(--bpn-navy)'],
                 ['Hadir', ringkas.hadir, 'var(--success)'],
@@ -729,33 +1377,135 @@ export default function AdminPage() {
                 ['Izin', ringkas.izin, 'var(--warning)'],
                 ['Pulang Cepat', ringkas.cepat, 'var(--danger)'],
               ].map(([l, v, c]) => (
-                <div key={l as string} style={{ background: 'var(--slate-50)', border: '1px solid var(--slate-200)', borderRadius: 12, padding: '0.6rem', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 800, color: c as string }}>{v}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--slate-500)' }}>{l}</div>
+                <div
+                  key={l as string}
+                  style={{
+                    background: 'var(--slate-50)',
+                    border: '1px solid var(--slate-200)',
+                    borderRadius: 12,
+                    padding: '0.6rem',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '1.3rem',
+                      fontWeight: 800,
+                      color: c as string,
+                    }}
+                  >
+                    {v}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      color: 'var(--slate-500)',
+                    }}
+                  >
+                    {l}
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="table-wrapper" style={{ maxHeight: '480px', overflowY: 'auto' }}>
+            {/* Tabel absensi dengan keterangan dan dokumen */}
+            <div
+              className="table-wrapper"
+              style={{ maxHeight: '480px', overflowY: 'auto' }}
+            >
               <table>
                 <thead>
-                  <tr><th>Tanggal</th><th>Peserta Magang</th><th>Asal Instansi</th><th>Masuk</th><th>Pulang</th><th>Kehadiran</th><th>Status Pulang</th></tr>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Peserta Magang</th>
+                    <th>Asal Instansi</th>
+                    <th>Masuk</th>
+                    <th>Pulang</th>
+                    <th>Kehadiran</th>
+                    <th>Status Pulang</th>
+                    <th>Keterangan</th>
+                    <th>Dokumen Izin/Sakit</th>
+                  </tr>
                 </thead>
+
                 <tbody>
                   {rekapRows.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center">Belum ada data absensi untuk filter ini</td></tr>
+                    <tr>
+                      <td colSpan={9} className="text-center">
+                        Belum ada data absensi untuk filter ini
+                      </td>
+                    </tr>
                   ) : (
                     rekapRows.map((a) => (
                       <tr key={a.id}>
                         <td style={nowrap}>{fmtTanggal(a.tanggal)}</td>
-                        <td style={nowrap}><strong>{a.siswa?.nama || '-'}</strong></td>
-                        <td>{a.sekolahNama}</td>
-                        <td style={nowrap}><code>{fmtJam(a.jam_masuk)}</code></td>
-                        <td style={nowrap}><code>{fmtJam(a.jam_pulang)}</code></td>
-                        <td>
-                          <span className={`badge badge-${a.status_masuk === 'hadir' ? 'success' : 'warning'}`}>{capitalize(a.status_masuk)}</span>
+
+                        <td style={nowrap}>
+                          <strong>{a.siswa?.nama || '-'}</strong>
                         </td>
-                        <td style={nowrap}><BadgePulang a={a} /></td>
+
+                        <td>{a.sekolahNama}</td>
+
+                        <td style={nowrap}>
+                          <code>{fmtJam(a.jam_masuk)}</code>
+                        </td>
+
+                        <td style={nowrap}>
+                          <code>{fmtJam(a.jam_pulang)}</code>
+                        </td>
+
+                        <td>
+                          <span
+                            className={`badge badge-${
+                              a.status_masuk === 'hadir'
+                                ? 'success'
+                                : 'warning'
+                            }`}
+                          >
+                            {capitalize(a.status_masuk)}
+                          </span>
+                        </td>
+
+                        <td style={nowrap}>
+                          <BadgePulang a={a} />
+                        </td>
+
+                        {/* Kolom keterangan izin/sakit */}
+                        <td
+                          style={{
+                            minWidth: '220px',
+                            maxWidth: '320px',
+                            whiteSpace: 'normal',
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {a.keterangan?.trim() || '-'}
+                        </td>
+
+                        {/* Kolom dokumen izin/sakit */}
+                        <td style={nowrap}>
+                          {a.dokumen_perizinan ? (
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() =>
+                                handleLihatDokumenIzin(
+                                  a.dokumen_perizinan
+                                )
+                              }
+                            >
+                              <i className="fas fa-file-alt"></i> Lihat Surat
+                            </button>
+                          ) : (
+                            <span
+                              style={{
+                                color: 'var(--slate-400)',
+                                fontSize: '0.8rem',
+                              }}
+                            >
+                              Tidak ada dokumen
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -763,17 +1513,18 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+        )}
 
-
-            </>
-          )}
-
-          {tab === 'registrasi' && (
-            <div style={{ maxWidth: 640, margin: '0 auto' }}>
+        {/* ================= REGISTRASI PESERTA ================= */}
+        {tab === 'registrasi' && (
+          <div style={{ maxWidth: 640, margin: '0 auto' }}>
             <div className="card">
               <div className="card-header">
-                <h3><i className="fas fa-user-plus"></i> Registrasi Peserta Baru</h3>
+                <h3>
+                  <i className="fas fa-user-plus"></i> Registrasi Peserta Baru
+                </h3>
               </div>
+
               <div className="form-group">
                 <input
                   type="text"
@@ -783,10 +1534,20 @@ export default function AdminPage() {
                   className="mb-2"
                 />
               </div>
+
               <div className="form-group">
-                <label><i className="fas fa-calendar-alt"></i> Tanggal Lahir (Kombinasi ID Sistem)</label>
-                <input type="date" value={tglLahirBaru} onChange={(e) => setTglLahirBaru(e.target.value)} className="mb-2" />
+                <label>
+                  <i className="fas fa-calendar-alt"></i> Tanggal Lahir
+                  (Kombinasi ID Sistem)
+                </label>
+                <input
+                  type="date"
+                  value={tglLahirBaru}
+                  onChange={(e) => setTglLahirBaru(e.target.value)}
+                  className="mb-2"
+                />
               </div>
+
               <div className="form-group">
                 <input
                   type="tel"
@@ -796,75 +1557,147 @@ export default function AdminPage() {
                   className="mb-2"
                 />
               </div>
+
               <div className="form-group">
-                <select value={sekolahBaruId} onChange={(e) => setSekolahBaruId(e.target.value)} className="mb-2">
+                <select
+                  value={sekolahBaruId}
+                  onChange={(e) => setSekolahBaruId(e.target.value)}
+                  className="mb-2"
+                >
                   <option value="">-- Pilih Instansi / Sekolah --</option>
-                  {sekolahList.filter((s) => s.aktif).map((s) => (
-                    <option key={s.id} value={s.id}>{s.nama}</option>
-                  ))}
+                  {sekolahList
+                    .filter((s) => s.aktif)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nama}
+                      </option>
+                    ))}
                 </select>
               </div>
+
               {namaSiswaBaru && tglLahirBaru && (
-                <p style={{ fontSize: '0.85rem', color: 'var(--slate-500)', marginBottom: '0.85rem' }}>
-                  ID Absen peserta: <code style={{ fontWeight: 700 }}>{generateUniqueSiswaID(namaSiswaBaru, tglLahirBaru)}</code>
+                <p
+                  style={{
+                    fontSize: '0.85rem',
+                    color: 'var(--slate-500)',
+                    marginBottom: '0.85rem',
+                  }}
+                >
+                  ID Absen peserta:{' '}
+                  <code style={{ fontWeight: 700 }}>
+                    {generateUniqueSiswaID(namaSiswaBaru, tglLahirBaru)}
+                  </code>
                 </p>
               )}
-              <button className="btn btn-primary btn-full" onClick={handleTambahSiswa}>
+
+              <button
+                className="btn btn-primary btn-full"
+                onClick={handleTambahSiswa}
+              >
                 <i className="fas fa-save"></i> Daftarkan Ke Sistem
               </button>
             </div>
-            </div>
-          )}
+          </div>
+        )}
 
-          {tab === 'instansi' && (
-            <>
-            <div className="card">
-              <div className="card-header">
-                <h3><i className="fas fa-building"></i> Kelola Instansi / Sekolah Mitra</h3>
-              </div>
-              <div className="flex gap-2" style={{ marginBottom: '1rem' }}>
-                <input
-                  type="text"
-                  value={namaSekolahBaru}
-                  onChange={(e) => setNamaSekolahBaru(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleTambahSekolah()}
-                  placeholder="Nama instansi baru/sekolah"
-                  style={{ flex: 2 }}
-                />
-                <button className="btn btn-primary btn-sm" onClick={handleTambahSekolah}>
-                  <i className="fas fa-plus"></i> Tambah Mitra
-                </button>
-              </div>
-              <div className="table-wrapper" style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr><th>Instansi Mitra</th><th>Peserta Aktif</th><th>Status</th><th>Kontrol</th></tr>
-                  </thead>
-                  <tbody>
-                    {sekolahList.length === 0 ? (
-                      <tr><td colSpan={4} className="text-center">Belum ada instansi mitra</td></tr>
-                    ) : (
-                      sekolahList.map((sek) => (
-                        <tr key={sek.id}>
-                          <td><strong>{sek.nama}</strong></td>
-                          <td>{siswaList.filter((s) => s.id_sekolah === sek.id && s.aktif).length}</td>
-                          <td>{sek.aktif ? <span className="badge badge-success">Aktif</span> : <span className="badge badge-danger">Nonaktif</span>}</td>
-                          <td>
-                            <button className={`btn btn-sm ${sek.aktif ? 'btn-outline' : 'btn-primary'}`} onClick={() => toggleSekolah(sek.id, !sek.aktif)}>
-                              {sek.aktif ? 'Nonaktifkan' : 'Aktifkan'}
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+        {/* ================= INSTANSI MITRA ================= */}
+        {tab === 'instansi' && (
+          <div className="card">
+            <div className="card-header">
+              <h3>
+                <i className="fas fa-building"></i> Kelola Instansi / Sekolah
+                Mitra
+              </h3>
             </div>
 
+            <div className="flex gap-2" style={{ marginBottom: '1rem' }}>
+              <input
+                type="text"
+                value={namaSekolahBaru}
+                onChange={(e) => setNamaSekolahBaru(e.target.value)}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' && handleTambahSekolah()
+                }
+                placeholder="Nama instansi baru/sekolah"
+                style={{ flex: 2 }}
+              />
 
-            </>
-          )}
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleTambahSekolah}
+              >
+                <i className="fas fa-plus"></i> Tambah Mitra
+              </button>
+            </div>
+
+            <div
+              className="table-wrapper"
+              style={{ maxHeight: '320px', overflowY: 'auto' }}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>Instansi Mitra</th>
+                    <th>Peserta Aktif</th>
+                    <th>Status</th>
+                    <th>Kontrol</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {sekolahList.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center">
+                        Belum ada instansi mitra
+                      </td>
+                    </tr>
+                  ) : (
+                    sekolahList.map((sek) => (
+                      <tr key={sek.id}>
+                        <td>
+                          <strong>{sek.nama}</strong>
+                        </td>
+
+                        <td>
+                          {
+                            siswaList.filter(
+                              (s) => s.id_sekolah === sek.id && s.aktif
+                            ).length
+                          }
+                        </td>
+
+                        <td>
+                          {sek.aktif ? (
+                            <span className="badge badge-success">
+                              Aktif
+                            </span>
+                          ) : (
+                            <span className="badge badge-danger">
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
+
+                        <td>
+                          <button
+                            className={`btn btn-sm ${
+                              sek.aktif ? 'btn-outline' : 'btn-primary'
+                            }`}
+                            onClick={() =>
+                              toggleSekolah(sek.id, !sek.aktif)
+                            }
+                          >
+                            {sek.aktif ? 'Nonaktifkan' : 'Aktifkan'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

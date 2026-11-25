@@ -60,6 +60,8 @@ export default function MagangPage() {
   const [currentTime, setCurrentTime] = useState('');
   const [currentDate, setCurrentDate] = useState('');
   const [statusMasuk, setStatusMasuk] = useState('hadir');
+  const [keteranganKehadiran, setKeteranganKehadiran] = useState('');
+  const [dokumenPerizinan, setDokumenPerizinan] = useState<File | null>(null);
   const [riwayatSaya, setRiwayatSaya] = useState<any[]>([]);
   const [absenHariIni, setAbsenHariIni] = useState<any>(null);
   const [pesanSukses, setPesanSukses] = useState('');
@@ -145,28 +147,70 @@ export default function MagangPage() {
     setRiwayatSaya(riwPribadi || []);
   };
 
-  const handleAbsenMasuk = async () => {
-    if (loading) return;
-    setLoading(true);
+  const handleKirimKehadiran = async () => {
+    if (loading || !siswaData || absenHariIni) return;
 
-    const { error } = await supabase.from('absensi').insert([
-      {
-        siswa_id: siswaData.id,
-        sekolah_id: siswaData.id_sekolah,
-        tanggal: getTanggalLokal(),
-        jam_masuk: getJamLokal(),
-        status_masuk: statusMasuk,
-        jenis_kehadiran: capitalize(statusMasuk),
-      },
-    ]);
-
-    if (error) {
-      alert('Gagal melakukan absen masuk: ' + error.message);
-    } else {
-      setPesanSukses('Absen masuk berhasil dicatat ke dalam sistem!');
-      await fetchAbsensiData(siswaData.id);
+    const isIzin = statusMasuk === 'izin' || statusMasuk === 'sakit';
+    if (isIzin && !keteranganKehadiran.trim()) {
+      alert('Keterangan wajib diisi untuk pengajuan sakit atau izin.');
+      return;
     }
-    setLoading(false);
+
+    if (dokumenPerizinan) {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(dokumenPerizinan.type)) {
+        alert('Format dokumen harus JPG, PNG, WEBP, PDF, DOC, atau DOCX.');
+        return;
+      }
+      if (dokumenPerizinan.size > 5 * 1024 * 1024) {
+        alert('Ukuran dokumen maksimal 5 MB.');
+        return;
+      }
+    }
+
+    setLoading(true);
+    let dokumenPath: string | null = null;
+
+    try {
+      if (isIzin && dokumenPerizinan) {
+        const safeName = dokumenPerizinan.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        dokumenPath = `${siswaData.id}/${getTanggalLokal()}-${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('dokumen-perizinan')
+          .upload(dokumenPath, dokumenPerizinan, { upsert: false, contentType: dokumenPerizinan.type });
+
+        if (uploadError) throw uploadError;
+      }
+
+      const { error } = await supabase.from('absensi').insert([
+        {
+          siswa_id: siswaData.id,
+          sekolah_id: siswaData.id_sekolah,
+          tanggal: getTanggalLokal(),
+          jam_masuk: isIzin ? null : getJamLokal(),
+          jam_pulang: null,
+          status_masuk: statusMasuk,
+          jenis_kehadiran: capitalize(statusMasuk),
+          keterangan: isIzin ? keteranganKehadiran.trim() : null,
+          dokumen_perizinan: dokumenPath,
+        },
+      ]);
+
+      if (error) throw error;
+
+      setPesanSukses(
+        isIzin
+          ? `Pengajuan ${statusMasuk} berhasil dikirim. Menunggu pencatatan oleh Admin/Pembimbing.`
+          : 'Absen masuk berhasil dicatat ke dalam sistem!'
+      );
+      setKeteranganKehadiran('');
+      setDokumenPerizinan(null);
+      await fetchAbsensiData(siswaData.id);
+    } catch (error: any) {
+      alert('Gagal mengirim kehadiran: ' + (error?.message || 'Terjadi kesalahan.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Tombol Absen Pulang ditekan
@@ -296,8 +340,10 @@ export default function MagangPage() {
     );
   }
 
-  const sudahMasuk = absenHariIni && absenHariIni.jam_masuk !== null;
-  const sudahPulang = absenHariIni && absenHariIni.jam_pulang !== null;
+  const sudahMengirimKehadiran = !!absenHariIni;
+  const sudahMasuk = !!absenHariIni && absenHariIni.jam_masuk !== null;
+  const sudahPulang = !!absenHariIni && absenHariIni.jam_pulang !== null;
+  const statusIzinSakit = absenHariIni && ['sakit', 'izin'].includes(absenHariIni.status_masuk);
 
   // ======================= TAMPILAN DASHBOARD =======================
   return (
@@ -375,14 +421,14 @@ export default function MagangPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Masuk hari ini</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: sudahMasuk ? '#15803d' : '#94a3b8' }}>
-                    {sudahMasuk ? fmtJam(absenHariIni.jam_masuk) : 'Belum'}
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: sudahMasuk ? '#15803d' : statusIzinSakit ? '#b45309' : '#94a3b8' }}>
+                    {sudahMasuk ? fmtJam(absenHariIni.jam_masuk) : statusIzinSakit ? capitalize(absenHariIni.status_masuk) : 'Belum'}
                   </div>
                 </div>
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Pulang hari ini</div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 700, color: sudahPulang ? '#b91c1c' : '#94a3b8' }}>
-                    {sudahPulang ? fmtJam(absenHariIni.jam_pulang) : 'Belum'}
+                    {sudahPulang ? fmtJam(absenHariIni.jam_pulang) : statusIzinSakit ? 'Tidak Perlu' : 'Belum'}
                   </div>
                 </div>
               </div>
@@ -393,37 +439,108 @@ export default function MagangPage() {
                 </div>
               )}
 
-              {!sudahMasuk && (
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label style={{ fontWeight: 700 }}>
-                    <i className="fas fa-clipboard-check"></i> Status Kehadiran Hari Ini
-                  </label>
-                  <select value={statusMasuk} onChange={(e) => setStatusMasuk(e.target.value)}>
-                    <option value="hadir">Hadir (Dinas Kerja/Normal)</option>
-                    <option value="sakit">Sakit (Melampirkan Surat)</option>
-                    <option value="izin">Izin (Kepentingan Resmi/Mendesak)</option>
-                  </select>
+              {/* 1. BELUM ABSEN SAMA SEKALI HARI INI */}
+              {!sudahMengirimKehadiran && (
+                <>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label style={{ fontWeight: 700 }}>
+                      <i className="fas fa-clipboard-check"></i> Status Kehadiran Hari Ini
+                    </label>
+                    <select value={statusMasuk} onChange={(e) => setStatusMasuk(e.target.value)}>
+                      <option value="hadir">Hadir (Dinas Kerja/Normal)</option>
+                      <option value="sakit">Sakit (Melampirkan Surat)</option>
+                      <option value="izin">Izin (Kepentingan Resmi/Mendesak)</option>
+                    </select>
+                  </div>
+
+                  {statusMasuk === 'hadir' && (
+                    <button
+                      className="btn btn-success btn-full"
+                      style={{ padding: '0.85rem', fontWeight: 700 }}
+                      onClick={handleKirimKehadiran}
+                      disabled={loading}
+                    >
+                      <i className="fas fa-sign-in-alt"></i> {loading ? 'Memproses...' : 'Absen Masuk Sekarang'}
+                    </button>
+                  )}
+
+                  {['sakit', 'izin'].includes(statusMasuk) && (
+                    <div style={{ marginTop: '0.5rem', padding: '1rem', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '12px' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#92400e', marginBottom: '0.5rem' }}>
+                        <i className="fas fa-file-circle-check"></i> Pengajuan {capitalize(statusMasuk)}
+                      </h4>
+                      <div className="form-group" style={{ marginBottom: '0.85rem' }}>
+                        <label style={{ fontWeight: 700 }}>
+                          Keterangan <span style={{ color: '#dc2626' }}>*Wajib diisi</span>
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={keteranganKehadiran}
+                          onChange={(e) => setKeteranganKehadiran(e.target.value)}
+                          placeholder={statusMasuk === 'sakit' ? 'Jelaskan kondisi atau alasan tidak dapat hadir...' : 'Jelaskan keperluan izin...'}
+                          required
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '0.85rem' }}>
+                        <label style={{ fontWeight: 700 }}>
+                          Lampiran dokumen / foto <span style={{ color: '#64748b', fontWeight: 400 }}>(Opsional)</span>
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,application/pdf,.doc,.docx"
+                          onChange={(e) => setDokumenPerizinan(e.target.files?.[0] || null)}
+                        />
+                        <small style={{ display: 'block', color: '#64748b', marginTop: '0.35rem' }}>
+                          Format JPG, PNG, WEBP, PDF, DOC, DOCX. Maksimal 5 MB.
+                        </small>
+                        {dokumenPerizinan && (
+                          <small style={{ display: 'block', color: '#166534', marginTop: '0.35rem' }}>
+                            Dipilih: {dokumenPerizinan.name}
+                          </small>
+                        )}
+                      </div>
+                      <button
+                        className="btn btn-primary btn-full"
+                        style={{ padding: '0.8rem', fontWeight: 700 }}
+                        onClick={handleKirimKehadiran}
+                        disabled={loading || !keteranganKehadiran.trim()}
+                      >
+                        <i className="fas fa-paper-plane"></i> {loading ? 'Mengirim...' : `Kirim Pengajuan ${capitalize(statusMasuk)}`}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 2. SUDAH ABSEN HADIR, TAPI BELUM ABSEN PULANG */}
+              {sudahMasuk && !sudahPulang && !statusIzinSakit && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <button
+                    className="btn btn-danger btn-full"
+                    style={{ padding: '0.85rem', fontWeight: 700 }}
+                    onClick={triggerAbsenPulang}
+                    disabled={loading}
+                  >
+                    <i className="fas fa-sign-out-alt"></i> {loading ? 'Memproses...' : 'Absen Pulang'}
+                  </button>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button
-                  className="btn btn-success"
-                  style={{ flex: 1, padding: '0.8rem', fontWeight: 700 }}
-                  onClick={handleAbsenMasuk}
-                  disabled={sudahMasuk || loading}
-                >
-                  <i className="fas fa-sign-in-alt"></i> Absen Masuk {sudahMasuk ? '✓' : ''}
-                </button>
-                <button
-                  className="btn btn-danger"
-                  style={{ flex: 1, padding: '0.8rem', fontWeight: 700 }}
-                  onClick={triggerAbsenPulang}
-                  disabled={!sudahMasuk || sudahPulang || loading}
-                >
-                  <i className="fas fa-sign-out-alt"></i> Absen Pulang {sudahPulang ? '✓' : ''}
-                </button>
-              </div>
+              {/* 3. SUDAH SELESAI (SUDAH PULANG ATAU STATUSNYA IZIN/SAKIT) */}
+              {(sudahPulang || statusIzinSakit) && (
+                <div className="alert alert-success" style={{ marginTop: '0.75rem' }}>
+                  <i className="fas fa-check-circle"></i>{' '}
+                  {statusIzinSakit ? (
+                    <>
+                      Pengajuan <strong>{capitalize(absenHariIni.status_masuk)}</strong> hari ini sudah tercatat. Anda tidak perlu melakukan absen pulang.
+                    </>
+                  ) : (
+                    <>
+                      Absensi hari ini sudah lengkap (Masuk &amp; Pulang). Terima kasih!
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Form alasan pulang cepat */}
               {showAlasanModal && (
